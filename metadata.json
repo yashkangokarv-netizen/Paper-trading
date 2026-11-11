@@ -1,0 +1,6 @@
+{
+  "name": "Paper Trader",
+  "description": "NSE & BSE paper trading terminal with live market quotes, candlestick charts, options Greeks, order pad, signals, and AI trading coach.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

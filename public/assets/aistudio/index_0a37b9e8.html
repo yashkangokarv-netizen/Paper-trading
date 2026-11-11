@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paper Trading Terminal – NSE / BSE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ================= SIGN-IN (shown only after logout) ================= -->
+<div id="login-view" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="card card-pad w-full max-w-sm space-y-4">
+    <div class="text-center">
+      <div class="text-xl font-extrabold">Paper Trading Terminal</div>
+      <div class="text-xs text-slate-400 mt-1">Practice with ₹5,00,000 virtual cash</div>
+    </div>
+    <div class="flex">
+      <button id="tab-btn-login" type="button" onclick="switchAuthTab('login')" class="flex-1 pb-3 text-xs font-bold uppercase tracking-wider text-cyan-400 border-b-2 border-cyan-400">Sign in</button>
+      <button id="tab-btn-signup" type="button" onclick="switchAuthTab('signup')" class="flex-1 pb-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b-2 border-transparent">Create account</button>
+    </div>
+    <div id="auth-error" class="hidden text-xs text-rose-300 bg-rose-950/40 border border-rose-900/50 rounded-lg p-2"><span id="auth-error-text"></span></div>
+    <div id="auth-success" class="hidden text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-900/50 rounded-lg p-2"><span id="auth-success-text"></span></div>
+
+    <form id="login-form" class="space-y-3">
+      <div><label class="field-label">User name</label><input id="login-username" class="input" autocomplete="username" /></div>
+      <div><label class="field-label">Password</label><input id="login-password" type="password" class="input" autocomplete="current-password" /></div>
+      <button type="submit" class="btn btn-primary w-full py-2.5">Sign in</button>
+      <button type="button" onclick="fillDemoCredentials()" class="w-full text-[11px] text-slate-400 hover:text-white">Fill demo credentials</button>
+    </form>
+
+    <form id="signup-form" class="hidden space-y-3">
+      <div><label class="field-label">Full name</label><input id="signup-fullname" class="input" /></div>
+      <div><label class="field-label">User name</label><input id="signup-username" class="input" /></div>
+      <div><label class="field-label">Password</label><input id="signup-password" type="password" class="input" /></div>
+      <div><label class="field-label">Confirm password</label><input id="signup-confirm-password" type="password" class="input" /></div>
+      <div><label class="field-label">I am a</label>
+        <select id="signup-role" class="select"><option>Beginner Trader</option><option>Quantitative Trader</option><option>Student</option></select>
+      </div>
+      <button type="submit" class="btn btn-primary w-full py-2.5">Create account</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MAIN TERMINAL ================= -->
+<div id="terminal-view" class="hidden min-h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <header class="border-b border-[#1e2735] bg-[#0d121b]">
+    <div class="max-w-[1500px] mx-auto px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-sky-400/15 text-sky-300 flex items-center justify-center text-lg"><i class="ph ph-chart-line-up"></i></div>
+        <div>
+          <div class="text-sm font-extrabold leading-tight">Paper Trading Terminal</div>
+          <div id="header-market-subtext" class="text-[11px] text-slate-400 leading-tight">NSE / BSE practice platform</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span id="header-market-badge" class="text-[10px] px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800/60 mono font-bold flex items-center gap-1">NSE CLOSED</span>
+        <span id="data-source-badge" class="status-pill status-wait">CONNECTING</span>
+        <button id="btn-fetch-live" onclick="fetchLiveMarketData()" class="btn btn-outline py-1 px-2.5 text-[11px]"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+        <button id="btn-toggle-sim" onclick="toggleLiveFeed()" class="btn btn-outline py-1 px-2.5 text-[11px]"><i class="ph ph-pause-circle"></i> Pause</button>
+      </div>
+
+      <div class="ml-auto flex items-center gap-4">
+        <div class="text-right hidden sm:block">
+          <div class="text-[10px] uppercase tracking-wider text-slate-500">Virtual cash</div>
+          <div id="header-user-desk" class="mono text-sm font-bold text-white">₹5,00,000.00</div>
+        </div>
+        <div id="live-clock" class="mono text-[11px] text-slate-400 hidden md:block"></div>
+        <button onclick="openAdminReviewModal()" class="btn btn-outline py-1 px-2.5 text-[11px] relative">
+          <i class="ph ph-shield-check"></i> Admin
+          <span id="header-renewal-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+        </button>
+        <button onclick="handleLogout()" class="btn btn-outline py-1 px-2.5 text-[11px]"><i class="ph ph-sign-out"></i></button>
+      </div>
+    </div>
+    <div class="max-w-[1500px] mx-auto px-4 pb-2 text-[11px] text-slate-400 flex flex-wrap gap-x-4">
+      <span id="data-source-detail">Connecting to data server…</span>
+    </div>
+  </header>
+
+  <!-- Market status banner -->
+  <div id="market-status-banner" class="bg-rose-950/40 border-b border-rose-900/60 px-6 py-2 flex items-center justify-between text-xs">
+    <div id="market-status-text" class="text-slate-300"></div>
+    <div id="market-next-session" class="text-slate-400 mono hidden sm:block"></div>
+  </div>
+
+  <!-- Ticker -->
+  <div class="border-b border-[#1e2735] bg-[#0a0e14] overflow-x-auto">
+    <div class="max-w-[1500px] mx-auto px-4 py-2 flex items-center gap-6 text-xs whitespace-nowrap mono">
+      <div><span class="text-slate-500">NIFTY</span> <span id="ticker-nifty" class="font-bold text-white">--</span> <span id="ticker-nifty-chg" class="font-bold text-[11px]"></span></div>
+      <div><span class="text-slate-500">BANKNIFTY</span> <span id="ticker-banknifty" class="font-bold text-white">--</span> <span id="ticker-banknifty-chg" class="font-bold text-[11px]"></span></div>
+      <div><span class="text-slate-500">SENSEX</span> <span id="ticker-sensex" class="font-bold text-white">--</span> <span id="ticker-sensex-chg" class="font-bold text-[11px]"></span></div>
+      <div><span class="text-slate-500">INDIA VIX</span> <span id="ticker-vix" class="font-bold text-white">--</span> <span id="ticker-vix-badge" class="badge badge-warn py-0 px-1 text-[10px]">--</span></div>
+      <div><span class="text-slate-500">PCR</span> <span id="ticker-pcr" class="font-bold text-white">--</span></div>
+      <div class="ml-auto"><span id="ticker-last-tick" class="text-[11px] font-bold">--</span></div>
+    </div>
+  </div>
+
+  <!-- Desktop navigation -->
+  <nav class="border-b border-[#1e2735] bg-[#0d121b] hidden lg:block">
+    <div class="max-w-[1500px] mx-auto px-4 flex gap-1 overflow-x-auto">
+      <button id="tab-nav-market-overview" class="nav-tab" onclick="switchTab('market-overview')"><i class="ph ph-globe-hemisphere-east"></i> Markets</button>
+      <button id="tab-nav-chart-invest" class="nav-tab active" onclick="switchTab('chart-invest')"><i class="ph ph-chart-candlestick"></i> Trade</button>
+      <button id="tab-nav-option-chain" class="nav-tab" onclick="switchTab('option-chain')"><i class="ph ph-list-numbers"></i> Option Chain</button>
+      <button id="tab-nav-portfolio" class="nav-tab" onclick="switchTab('portfolio')"><i class="ph ph-wallet"></i> Portfolio <span id="portfolio-count" class="badge badge-neutral">0</span></button>
+      <button id="tab-nav-master-table" class="nav-tab" onclick="switchTab('master-table')"><i class="ph ph-target"></i> Signals</button>
+      <button id="tab-nav-greeks-depth" class="nav-tab" onclick="switchTab('greeks-depth')"><i class="ph ph-function"></i> Greeks &amp; OI</button>
+      <button id="tab-nav-ai-copilot" class="nav-tab" onclick="switchTab('ai-copilot')"><i class="ph ph-sparkle"></i> AI Coach</button>
+      <button id="tab-nav-learn-guide" class="nav-tab" onclick="switchTab('learn-guide')"><i class="ph ph-graduation-cap"></i> Learn</button>
+    </div>
+  </nav>
+
+  <main class="flex-1 max-w-[1500px] w-full mx-auto px-4 py-5">
+
+    <!-- ========== MARKETS ========== -->
+    <section id="view-tab-market-overview" class="hidden space-y-5">
+      <div id="indices-ribbon" class="flex gap-3 overflow-x-auto pb-1"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="card card-pad space-y-3">
+          <div class="card-title">Market breadth</div>
+          <div class="flex justify-between text-xs mono"><span class="text-emerald-400 font-bold">Advances <span id="breadth-adv-count">--</span></span><span class="text-rose-400 font-bold">Declines <span id="breadth-dec-count">--</span></span></div>
+          <div class="w-full bg-slate-800 rounded-full h-2.5 flex overflow-hidden"><div id="breadth-bar-adv" class="bg-emerald-500 h-full" style="width:50%"></div><div id="breadth-bar-dec" class="bg-rose-500 h-full" style="width:50%"></div></div>
+          <div class="text-[11px] text-slate-500">Reference data – not live.</div>
+          <div class="card-title pt-2">Global cues</div>
+          <div id="global-markets-bar" class="grid grid-cols-2 gap-2 text-xs mono"></div>
+        </div>
+        <div class="card card-pad lg:col-span-2">
+          <div class="card-title mb-3">Sector performance</div>
+          <div id="sector-grid-container" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="card card-pad"><div class="card-title mb-2 text-emerald-400">Top gainers</div><div id="top-gainers-list" class="space-y-1"></div></div>
+        <div class="card card-pad"><div class="card-title mb-2 text-rose-400">Top losers</div><div id="top-losers-list" class="space-y-1"></div></div>
+        <div class="card card-pad"><div class="card-title mb-2">Stocks</div><div id="most-active-list" class="space-y-1"></div></div>
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="p-4 flex flex-wrap items-center gap-3 border-b border-[#1e2735]">
+          <div class="card-title">All instruments <span id="stock-table-count" class="ml-2 text-slate-500 normal-case tracking-normal">--</span></div>
+          <div class="relative ml-auto w-full sm:w-64">
+            <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-500"></i>
+            <input id="market-search-input" oninput="filterMarketAssets()" placeholder="Search name, ticker or sector" class="input pl-8" />
+            <button id="btn-clear-search" onclick="clearMarketSearch()" class="hidden absolute right-2 top-1.5 text-slate-400 hover:text-white"><i class="ph ph-x"></i></button>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex gap-2 overflow-x-auto border-b border-[#1e2735]">
+          <button id="filter-chip-ALL" class="chip active" onclick="setMarketFilter('ALL')">All</button>
+          <button id="filter-chip-INDICES" class="chip" onclick="setMarketFilter('INDICES')">Indices</button>
+          <button id="filter-chip-GAINERS" class="chip" onclick="setMarketFilter('GAINERS')">Gainers</button>
+          <button id="filter-chip-LOSERS" class="chip" onclick="setMarketFilter('LOSERS')">Losers</button>
+          <button id="filter-chip-BANKING" class="chip" onclick="setMarketFilter('BANKING')">Banking</button>
+          <button id="filter-chip-IT" class="chip" onclick="setMarketFilter('IT')">IT</button>
+          <button id="filter-chip-AUTO" class="chip" onclick="setMarketFilter('AUTO')">Auto</button>
+        </div>
+        <div class="overflow-x-auto max-h-[520px]">
+          <table class="data-table">
+            <thead><tr><th>Instrument</th><th>Sector</th><th class="r">Price</th><th class="r">Change</th><th class="r">Day range</th><th class="r">P/E</th><th class="c">Trend</th><th class="c"></th></tr></thead>
+            <tbody id="stock-directory-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== TRADE ========== -->
+    <section id="view-tab-chart-invest" class="space-y-4">
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button id="chip-asset-NIFTY" class="chip active" onclick="selectAsset('NIFTY')">NIFTY 50</button>
+        <button id="chip-asset-BANKNIFTY" class="chip" onclick="selectAsset('BANKNIFTY')">BANK NIFTY</button>
+        <button id="chip-asset-SENSEX" class="chip" onclick="selectAsset('SENSEX')">SENSEX</button>
+        <button id="chip-asset-RELIANCE" class="chip" onclick="selectAsset('RELIANCE')">Reliance</button>
+        <button id="chip-asset-HDFCBANK" class="chip" onclick="selectAsset('HDFCBANK')">HDFC Bank</button>
+        <button id="chip-asset-TATAMOTORS" class="chip" onclick="selectAsset('TATAMOTORS')">Tata Motors</button>
+        <button id="chip-asset-TCS" class="chip" onclick="selectAsset('TCS')">TCS</button>
+        <button id="chip-asset-INFY" class="chip" onclick="selectAsset('INFY')">Infosys</button>
+        <button id="chip-asset-TATASTEEL" class="chip" onclick="selectAsset('TATASTEEL')">Tata Steel</button>
+        <button class="chip" onclick="switchTab('market-overview')"><i class="ph ph-magnifying-glass"></i> More</button>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <!-- Chart column -->
+        <div class="xl:col-span-2 space-y-4">
+          <div class="card">
+            <div class="p-4 flex flex-wrap items-end justify-between gap-3 border-b border-[#1e2735]">
+              <div>
+                <div id="active-asset-title" class="text-base font-extrabold">NIFTY 50</div>
+                <div class="text-[11px] text-slate-400"><span id="active-asset-type">INDEX / NSE</span> · <span id="active-asset-sector">Benchmark</span></div>
+              </div>
+              <div class="text-right">
+                <div id="active-asset-ltp" class="text-2xl font-extrabold mono">--</div>
+                <div id="active-asset-chg" class="text-sm font-bold mono">--</div>
+              </div>
+            </div>
+            <div class="px-4 py-2 flex items-center justify-between border-b border-[#1e2735]">
+              <div>
+                <span id="chart-panel-title" class="text-xs font-semibold">INTRADAY CHART</span>
+                <span id="chart-status-label" class="text-[11px] text-slate-400 ml-2"></span>
+              </div>
+              <div class="flex gap-2">
+                <button id="btn-chart-native" onclick="setChartEngine('native')" class="chip active">Built-in</button>
+                <button id="btn-chart-tv" onclick="setChartEngine('tradingview')" class="chip">TradingView</button>
+              </div>
+            </div>
+            <div id="native_chart_container" class="p-2" style="height:420px">
+              <div id="native-asset-name" class="text-[11px] text-slate-500 px-1 pb-1"></div>
+              <canvas id="native_candlestick_canvas"></canvas>
+            </div>
+            <div id="tradingview_chart_container" class="hidden" style="height:420px"></div>
+            <div class="px-4 py-3 border-t border-[#1e2735] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div><div class="text-slate-500">Day range</div><div id="val-day-range" class="mono font-semibold">--</div></div>
+              <div><div class="text-slate-500">Volatility</div><span id="val-regime" class="badge badge-warn">--</span></div>
+              <div><div class="text-slate-500">Trend</div><span id="chart-trend-badge" class="badge badge-neutral">--</span></div>
+              <div><div class="text-slate-500">Momentum</div><div id="gauge-osc" class="font-semibold">--</div></div>
+            </div>
+            <div class="px-4 pb-3 grid grid-cols-2 gap-3 text-xs">
+              <div><div class="text-slate-500">Moving averages</div><div id="gauge-ma" class="text-base font-bold mt-1">--</div></div>
+              <div><div class="text-slate-500">Overall signal</div><div id="gauge-overall" class="text-base font-bold mt-1">--</div></div>
+            </div>
+          </div>
+
+          <!-- Smart suggestion -->
+          <div class="card card-pad space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="card-title">Strategy suggestion</div>
+              <div id="invest-action-badge"></div>
+            </div>
+            <div class="text-sm font-bold" id="invest-strike-name">--</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Entry</div><div id="invest-entry" class="font-semibold mt-0.5">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Stop loss</div><div id="invest-sl" class="mono font-semibold text-rose-400 mt-0.5">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Hold</div><div id="invest-horizon" class="font-semibold mt-0.5">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Target 1</div><div id="invest-t1" class="mono font-semibold text-emerald-400 mt-0.5">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Target 2</div><div id="invest-t2" class="mono font-semibold text-emerald-400 mt-0.5">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Risk : Reward</div><div id="invest-rr" class="mono font-semibold mt-0.5">--</div></div>
+            </div>
+            <div class="text-xs text-slate-400">Conviction: <span id="invest-conviction" class="text-white font-semibold">--</span></div>
+            <div class="text-xs text-slate-400 space-y-1 border-t border-[#1e2735] pt-3">
+              <div class="text-slate-300 font-semibold">Why this suggestion</div>
+              <div id="invest-why-trend"></div><div id="invest-why-vix"></div><div id="invest-why-pcr"></div>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button onclick="executePaperTrade()" class="btn btn-primary"><i class="ph ph-lightning"></i> 1-click paper trade</button>
+              <button onclick="openCustomTradeModal()" class="btn btn-outline"><i class="ph ph-sliders"></i> Custom trade</button>
+            </div>
+            <div class="text-[11px] text-slate-500">Educational signals only – not investment advice. PCR / open-interest levels are simulated (no free live source).</div>
+          </div>
+        </div>
+
+        <!-- Order pad -->
+        <div class="space-y-4">
+          <div class="card card-pad space-y-4 xl:sticky xl:top-4">
+            <div class="flex items-center justify-between">
+              <div class="card-title">Order ticket</div>
+              <span id="beginner-mode-badge" class="badge badge-neutral">--</span>
+            </div>
+            <div class="text-sm font-bold" id="beginner-order-asset">NIFTY 50</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-side-buy" onclick="setBeginnerOrderSide('BUY')" class="py-2.5 rounded-lg font-bold text-xs bg-emerald-600 text-white flex items-center justify-center gap-1.5"><i class="ph ph-trend-up"></i> BUY</button>
+              <button id="btn-side-sell" onclick="setBeginnerOrderSide('SELL')" class="py-2.5 rounded-lg font-bold text-xs bg-slate-800 text-slate-400 flex items-center justify-center gap-1.5"><i class="ph ph-trend-down"></i> SELL</button>
+            </div>
+            <div class="grid grid-cols-3 gap-1 p-1 bg-[#0d121b] rounded-lg text-[11px] font-semibold">
+              <button id="btn-mode-eq" onclick="setBeginnerInstrument('EQ')" class="py-1.5 px-2 rounded-md text-slate-400">Shares</button>
+              <button id="btn-mode-fut" onclick="setBeginnerInstrument('FUT')" class="py-1.5 px-2 rounded-md text-slate-400">Futures</button>
+              <button id="btn-mode-opt" onclick="setBeginnerInstrument('OPT')" class="py-1.5 px-2 rounded-md text-slate-400">Options</button>
+            </div>
+            <div class="flex justify-between text-xs"><span class="text-slate-400">Market price</span><span id="beginner-order-cmp" class="mono font-bold">--</span></div>
+            <div>
+              <div class="flex justify-between"><label id="beginner-qty-label" class="field-label">Quantity</label><span id="beginner-lot-desc" class="text-[11px] text-slate-500"></span></div>
+              <div class="flex gap-2">
+                <button type="button" onclick="adjustBeginnerQty(-1)" class="btn btn-outline px-3">−</button>
+                <input id="beginner-order-qty" type="number" min="1" value="1" oninput="updateBeginnerOrderPad()" class="input text-center mono" />
+                <button type="button" onclick="adjustBeginnerQty(1)" class="btn btn-outline px-3">+</button>
+              </div>
+              <div id="beginner-quick-qty-btns" class="flex gap-1.5 mt-2 text-[11px]"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Target</div><div id="beginner-target-price" class="mono font-semibold text-emerald-400">--</div></div>
+              <div class="bg-[#0d121b] rounded-lg p-2.5"><div class="text-slate-500">Stop loss</div><div id="beginner-sl-price" class="mono font-semibold text-rose-400">--</div></div>
+            </div>
+            <div class="space-y-1.5 text-xs border-t border-[#1e2735] pt-3">
+              <div class="flex justify-between"><span class="text-slate-400">Required margin</span><span id="beginner-req-margin" class="mono font-bold">--</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Available cash</span><span id="beginner-avail-cash" class="mono font-bold">--</span></div>
+            </div>
+            <button id="btn-execute-beginner-order" onclick="executeBeginnerPaperTrade()" class="w-full py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs uppercase tracking-wider">Place practice order</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OPTION CHAIN ========== -->
+    <section id="view-tab-option-chain" class="hidden space-y-4">
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button id="oc-chip-NIFTY" class="chip active" onclick="selectOptionChainAsset('NIFTY')">NIFTY</button>
+        <button id="oc-chip-BANKNIFTY" class="chip" onclick="selectOptionChainAsset('BANKNIFTY')">BANKNIFTY</button>
+        <button id="oc-chip-SENSEX" class="chip" onclick="selectOptionChainAsset('SENSEX')">SENSEX</button>
+        <button id="oc-chip-FINNIFTY" class="chip" onclick="selectOptionChainAsset('FINNIFTY')">FINNIFTY</button>
+        <button id="oc-chip-MIDCPNIFTY" class="chip" onclick="selectOptionChainAsset('MIDCPNIFTY')">MIDCPNIFTY</button>
+        <button id="oc-chip-RELIANCE" class="chip" onclick="selectOptionChainAsset('RELIANCE')">RELIANCE</button>
+        <button id="oc-chip-HDFCBANK" class="chip" onclick="selectOptionChainAsset('HDFCBANK')">HDFCBANK</button>
+        <button id="oc-chip-TCS" class="chip" onclick="selectOptionChainAsset('TCS')">TCS</button>
+      </div>
+      <div class="card">
+        <div class="p-4 flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-[#1e2735] text-xs">
+          <div><span id="oc-spot-name" class="font-bold text-sm">NIFTY 50</span><div><span id="oc-spot-price" class="mono font-extrabold text-lg">--</span><span id="oc-spot-chg" class="mono text-xs ml-1.5"></span></div></div>
+          <div><div class="text-slate-500">Expiry (approx.)</div><div id="oc-expiry" class="mono font-semibold">--</div></div>
+          <div><div class="text-slate-500">Lot size</div><div id="oc-lot-size" class="mono font-semibold">--</div></div>
+          <div><div class="text-slate-500">PCR</div><div id="oc-pcr" class="mono font-semibold">--</div></div>
+          <div><div class="text-slate-500">India VIX</div><div id="oc-vix" class="mono font-semibold">--</div></div>
+          <div class="ml-auto text-right"><div class="text-slate-500">Available cash</div><div id="oc-avail-balance" class="mono font-bold">--</div></div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table mono">
+            <thead>
+              <tr><th colspan="4" class="c" style="color:#4ade80">CALLS</th><th class="c">STRIKE</th><th colspan="4" class="c" style="color:#f87171">PUTS</th></tr>
+              <tr><th class="r">OI</th><th class="r">LTP</th><th class="c">Trade</th><th class="c">Type</th><th class="c"></th><th class="c">Type</th><th class="c">Trade</th><th>LTP</th><th>OI</th></tr>
+            </thead>
+            <tbody id="option-chain-tbody"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 text-[11px] text-slate-500 border-t border-[#1e2735]">Option prices are theoretical (Black-Scholes using India VIX as volatility) and open interest is simulated. Real broker quotes will differ.</div>
+      </div>
+    </section>
+
+    <!-- ========== PORTFOLIO ========== -->
+    <section id="view-tab-portfolio" class="hidden space-y-4">
+      <div id="fund-renewal-banner" class="hidden"></div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="card card-pad"><div class="card-title">Net account value</div><div id="ledger-net-value" class="text-xl font-extrabold mono mt-1">--</div><div id="ledger-pnl-summary" class="text-[10px] mono mt-0.5">--</div></div>
+        <div class="card card-pad"><div class="card-title">Available cash</div><div id="ledger-available-balance" class="text-xl font-extrabold mono mt-1">--</div></div>
+        <div class="card card-pad"><div class="card-title">Margin in use</div><div id="ledger-used-margin" class="text-xl font-extrabold mono mt-1">--</div></div>
+        <div class="card card-pad"><div class="card-title">Realized P&amp;L</div><div id="ledger-realized-pnl" class="text-base font-extrabold mono mt-1">--</div></div>
+      </div>
+
+      <div class="card">
+        <div class="px-4 pt-3 flex items-center gap-2 border-b border-[#1e2735]">
+          <button id="btn-subtab-active" onclick="switchPortfolioTab('active')" class="nav-tab active">Open positions <span id="portfolio-count-inner" class="hidden"></span></button>
+          <button id="btn-subtab-history" onclick="switchPortfolioTab('history')" class="nav-tab">History <span id="history-count" class="badge badge-neutral">0</span></button>
+          <div class="ml-auto pb-2 flex gap-2">
+            <button onclick="clearPortfolio()" class="btn btn-outline py-1 text-[11px]">Square off all</button>
+            <button onclick="resetPortfolioBalance()" class="btn btn-outline py-1 text-[11px]">Reset account</button>
+          </div>
+        </div>
+
+        <div id="portfolio-active-container">
+          <div id="portfolio-empty-state" class="py-14 text-center text-slate-400">
+            <i class="ph ph-tray text-3xl text-slate-500"></i>
+            <div class="text-sm font-semibold mt-2 text-slate-200">No open positions</div>
+            <div class="text-xs mt-1">Place a practice order from the Trade tab to get started.</div>
+            <button onclick="switchTab('chart-invest')" class="btn btn-primary mt-4">Go to Trade</button>
+          </div>
+          <div id="portfolio-table-container" class="hidden overflow-x-auto">
+            <table class="data-table">
+              <thead><tr><th>Contract</th><th>Strategy</th><th>Side</th><th class="r">Qty</th><th class="r">Entry</th><th class="r">Current</th><th class="r">P&amp;L</th><th class="c"></th></tr></thead>
+              <tbody id="portfolio-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="portfolio-history-container" class="hidden">
+          <div id="history-empty-state" class="py-14 text-center text-xs text-slate-400">No closed trades yet.</div>
+          <div id="history-table-container" class="hidden overflow-x-auto">
+            <div class="px-4 py-2 text-right"><button onclick="clearTradeHistory()" class="btn btn-outline py-1 text-[11px]">Clear history</button></div>
+            <table class="data-table">
+              <thead><tr><th>Closed</th><th>Contract</th><th>Strategy</th><th>Side</th><th class="r">Qty</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">P&amp;L</th><th class="c">Result</th></tr></thead>
+              <tbody id="portfolio-history-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SIGNALS ========== -->
+    <section id="view-tab-master-table" class="hidden space-y-4">
+      <div class="card">
+        <div class="p-4 border-b border-[#1e2735]">
+          <div class="card-title">Signal summary</div>
+          <div class="text-xs text-slate-400 mt-1">A directional trade needs trend, news, PCR and volatility (VIX ≥ 16) to agree. Otherwise the signal is Watchlist / No trade.</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead><tr><th>Price</th><th>Trend</th><th>PCR</th><th>News / momentum</th><th>VIX</th><th>Recommendation</th></tr></thead>
+            <tbody id="master-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="card card-pad space-y-3">
+          <div class="flex items-center justify-between"><div class="card-title">Trade blueprint</div><span id="blueprint-state" class="badge badge-neutral">--</span></div>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="col-span-2"><div class="text-slate-500">Strategy</div><div id="blueprint-strategy" class="font-semibold">--</div></div>
+            <div class="col-span-2"><div class="text-slate-500">Entry trigger</div><div id="blueprint-trigger" class="font-semibold">--</div></div>
+            <div><div class="text-slate-500">Side</div><div id="blueprint-side" class="font-semibold text-cyan-300">--</div></div>
+            <div><div class="text-slate-500">Hold</div><div id="blueprint-horizon" class="font-semibold">--</div></div>
+            <div><div class="text-slate-500">Target 1</div><div id="blueprint-t1" class="mono font-bold text-emerald-400">--</div></div>
+            <div><div class="text-slate-500">Target 2</div><div id="blueprint-t2" class="mono font-bold text-emerald-400">--</div></div>
+            <div><div class="text-slate-500">Stop loss</div><div id="blueprint-sl" class="mono font-bold text-rose-400">--</div></div>
+            <div class="col-span-2"><div class="text-slate-500">Rationale</div><div id="blueprint-implication" class="text-slate-300">--</div></div>
+          </div>
+        </div>
+
+        <div class="card card-pad space-y-3">
+          <div class="card-title">What-if scenarios &amp; manual inputs</div>
+          <div class="flex flex-wrap gap-2">
+            <button class="chip" onclick="applyScenario('vix_bullish_breakout')">Bullish breakout</button>
+            <button class="chip" onclick="applyScenario('vix_bearish_breakdown')">Bearish breakdown</button>
+            <button class="chip" onclick="applyScenario('low_vix_compression')">Low VIX</button>
+            <button class="chip" onclick="applyScenario('conflicted_divergence')">Conflicting signals</button>
+          </div>
+          <div class="text-[11px] text-slate-500">Edits below apply until the next live refresh.</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div><label class="field-label">Spot</label><input id="input-spot" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">India VIX</label><input id="input-vix" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">PCR</label><input id="input-pcr" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">Days to expiry</label><input id="input-dte" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">IV %</label><input id="input-iv" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">Trend</label><select id="input-trend" class="select"><option>BULL</option><option>BEAR</option></select></div>
+            <div><label class="field-label">News</label><select id="input-news-sentiment" class="select"><option>POSITIVE</option><option>NEUTRAL</option><option>NEGATIVE</option></select></div>
+            <div><label class="field-label">Call resistance</label><input id="input-call-res" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">Put support</label><input id="input-put-sup" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">Call OI (L)</label><input id="input-call-oi" type="number" step="any" class="input mono" /></div>
+            <div><label class="field-label">Put OI (L)</label><input id="input-put-oi" type="number" step="any" class="input mono" /></div>
+            <div class="col-span-2 sm:col-span-3"><label class="field-label">Headline</label><input id="input-news-headline" class="input" /></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== GREEKS & OI ========== -->
+    <section id="view-tab-greeks-depth" class="hidden space-y-4">
+      <div class="card card-pad">
+        <div class="card-title mb-3">Option Greeks (at-the-money)</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div class="bg-[#0d121b] rounded-lg p-3"><div class="text-slate-500">Expected move (1σ)</div><div id="greek-sigma" class="mono text-base font-bold mt-1">--</div><div id="greek-sigma-range" class="mono text-[11px] text-slate-400">--</div></div>
+          <div class="bg-[#0d121b] rounded-lg p-3"><div class="text-slate-500">Delta</div><div class="mono mt-1">Call <span id="greek-delta-call" class="font-bold text-emerald-400">--</span></div><div class="mono">Put <span id="greek-delta-put" class="font-bold text-rose-400">--</span></div></div>
+          <div class="bg-[#0d121b] rounded-lg p-3"><div class="text-slate-500">Gamma</div><div id="greek-gamma" class="mono text-base font-bold mt-1">--</div><div id="gamma-warning" class="hidden text-[11px] text-amber-400 mt-1"></div></div>
+          <div class="bg-[#0d121b] rounded-lg p-3"><div class="text-slate-500">Theta (per day)</div><div class="mono mt-1">Call <span id="greek-theta-call" class="font-bold">--</span></div><div class="mono">Put <span id="greek-theta-put" class="font-bold">--</span></div><div class="text-slate-500 mt-2">Vega</div><div id="greek-vega" class="mono font-bold">--</div></div>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title mb-3">Open interest &amp; support / resistance</div>
+        <div id="oi-depth-container"></div>
+      </div>
+    </section>
+
+    <!-- ========== AI COACH ========== -->
+    <section id="view-tab-ai-copilot" class="hidden">
+      <div class="card flex flex-col" style="height:calc(100vh - 260px); min-height:480px">
+        <div class="p-4 border-b border-[#1e2735] flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="card-title">Trading coach</div>
+            <div class="text-[11px] text-slate-400 mt-1 mono">CMP <span id="ai-ctx-cmp">--</span> · VIX <span id="ai-ctx-vix">--</span> · PCR <span id="ai-ctx-pcr">--</span> · Trend <span id="ai-ctx-trend">--</span> · Gate <span id="ai-ctx-gate">--</span></div>
+          </div>
+          <button onclick="clearChatHistory()" class="btn btn-outline py-1 text-[11px]">Clear</button>
+        </div>
+        <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+        <div class="px-4 pt-2 flex gap-2 overflow-x-auto">
+          <button class="chip" onclick="sendQuickPrompt('How do I place my first trade?')">First trade</button>
+          <button class="chip" onclick="sendQuickPrompt('What is a stop loss?')">Stop loss</button>
+          <button class="chip" onclick="sendQuickPrompt('Explain candlesticks')">Candlesticks</button>
+          <button class="chip" onclick="sendQuickPrompt('Market setup overview')">Market setup</button>
+          <button class="chip" onclick="sendQuickPrompt('Explain greeks')">Greeks</button>
+        </div>
+        <form onsubmit="handleSendChatMessage(event)" class="p-4 flex gap-2">
+          <input id="ai-chat-input" class="input" placeholder="Ask a question…" autocomplete="off" />
+          <button type="submit" class="btn btn-primary px-4"><i class="ph ph-paper-plane-tilt"></i></button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ========== LEARN ========== -->
+    <section id="view-tab-learn-guide" class="hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card card-pad space-y-2"><div class="card-title">1 · How this app works</div><p class="text-sm text-slate-300">You start with ₹5,00,000 of virtual cash. Orders use live prices but no real money is ever involved.</p></div>
+        <div class="card card-pad space-y-2"><div class="card-title">2 · Place a trade</div><p class="text-sm text-slate-300">Pick an instrument in <b>Trade</b>, choose BUY or SELL, set the quantity, and press <b>Place practice order</b>.</p></div>
+        <div class="card card-pad space-y-2"><div class="card-title">3 · Manage risk</div><p class="text-sm text-slate-300">Always know your stop loss before entering. Risk no more than 1–2% of capital on a single trade.</p></div>
+        <div class="card card-pad space-y-2"><div class="card-title">4 · Review</div><p class="text-sm text-slate-300">Open <b>Portfolio</b> to see live P&amp;L, square off positions and review your history.</p></div>
+        <div class="card card-pad space-y-2 md:col-span-2"><div class="card-title">About the data</div><p class="text-sm text-slate-300">Prices, day range, and India VIX are ingested directly from <b>Google Finance</b> via <span class="mono">server.js</span> in real-time. PCR, open interest, quantitative analytics, and option Greeks are computed model-based.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Mobile bottom navigation -->
+  <nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#0d121b] border-t border-[#1e2735] flex">
+    <button id="mob-tab-market-overview" class="mob-tab" onclick="switchTab('market-overview')"><i class="ph ph-globe-hemisphere-east"></i>Markets</button>
+    <button id="mob-tab-chart-invest" class="mob-tab active" onclick="switchTab('chart-invest')"><i class="ph ph-chart-candlestick"></i>Trade</button>
+    <button id="mob-tab-option-chain" class="mob-tab" onclick="switchTab('option-chain')"><i class="ph ph-list-numbers"></i>Options</button>
+    <button id="mob-tab-portfolio" class="mob-tab" onclick="switchTab('portfolio')"><i class="ph ph-wallet"></i>Portfolio</button>
+    <button id="mob-tab-master-table" class="mob-tab" onclick="switchTab('master-table')"><i class="ph ph-target"></i>Signals</button>
+    <button id="mob-tab-ai-copilot" class="mob-tab" onclick="switchTab('ai-copilot')"><i class="ph ph-sparkle"></i>Coach</button>
+  </nav>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- Option order -->
+<div id="option-order-modal" class="modal-backdrop hidden">
+  <div class="modal-box p-5 space-y-4">
+    <div class="flex items-start justify-between">
+      <div>
+        <div id="option-modal-contract" class="text-sm font-extrabold mono">--</div>
+        <div class="text-[11px] text-slate-400">Spot <span id="option-modal-spot" class="mono">--</span> · <span id="option-modal-lot-size-info">--</span></div>
+      </div>
+      <div class="flex items-center gap-2"><span id="option-modal-side-badge" class="px-2 py-0.5 rounded text-[10px] font-black">BUY</span><button onclick="closeOptionOrderModal()" class="text-slate-400 hover:text-white"><i class="ph ph-x text-lg"></i></button></div>
+    </div>
+    <div class="flex justify-between text-xs"><span class="text-slate-400">Option price (LTP)</span><span id="option-modal-ltp" class="mono font-bold">--</span></div>
+    <div class="grid grid-cols-2 gap-1 p-1 bg-[#0d121b] rounded-lg">
+      <button id="btn-opt-side-buy" onclick="setOptionOrderSide('BUY')" class="py-2 rounded-lg font-black text-xs bg-emerald-600 text-white">BUY</button>
+      <button id="btn-opt-side-sell" onclick="setOptionOrderSide('SELL')" class="py-2 rounded-lg font-black text-xs text-slate-400">SELL</button>
+    </div>
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <button id="btn-opt-prod-nrml" onclick="setOptionProductType('NRML')" class="py-2 rounded-lg">NRML (carry)</button>
+      <button id="btn-opt-prod-mis" onclick="setOptionProductType('MIS')" class="py-2 rounded-lg">MIS (intraday)</button>
+    </div>
+    <div>
+      <label class="field-label">Lots</label>
+      <div class="flex gap-2">
+        <button type="button" onclick="adjustOptionLots(-1)" class="btn btn-outline px-3">−</button>
+        <input id="option-order-lots" type="number" min="1" value="1" oninput="onOptionLotsChange()" class="input text-center mono" />
+        <button type="button" onclick="adjustOptionLots(1)" class="btn btn-outline px-3">+</button>
+      </div>
+      <div class="flex gap-1.5 mt-2 text-[11px]">
+        <button type="button" onclick="setOptionLotsExact(1)" class="chip py-0.5">1</button>
+        <button type="button" onclick="setOptionLotsExact(2)" class="chip py-0.5">2</button>
+        <button type="button" onclick="setOptionLotsExact(5)" class="chip py-0.5">5</button>
+        <button type="button" onclick="setOptionLotsExact(10)" class="chip py-0.5">10</button>
+      </div>
+      <div id="option-modal-qty" class="text-[11px] text-slate-400 mt-1"></div>
+    </div>
+    <div class="space-y-1.5 text-xs border-t border-[#1e2735] pt-3">
+      <div class="flex justify-between"><span class="text-slate-400">Required amount / margin</span><span id="option-modal-margin" class="mono font-bold">--</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Available cash</span><span id="option-modal-balance" class="mono font-bold">--</span></div>
+    </div>
+    <button id="btn-opt-execute" onclick="executeOptionPaperTrade()" class="w-full py-3.5 rounded-xl bg-emerald-600 text-white font-black text-sm"><span id="btn-opt-execute-text">Place order</span></button>
+  </div>
+</div>
+
+<!-- Custom trade -->
+<div id="custom-trade-modal" class="modal-backdrop hidden">
+  <div class="modal-box p-5 space-y-3">
+    <div class="flex items-center justify-between"><div class="text-sm font-extrabold">Custom trade</div><button onclick="closeCustomTradeModal()" class="text-slate-400 hover:text-white"><i class="ph ph-x text-lg"></i></button></div>
+    <div><label class="field-label">Strategy name</label><input id="ct-strategy-name" class="input" value="Custom Strategy" />
+      <div class="flex gap-1.5 mt-2"><button class="chip py-0.5" onclick="setCustomStrategyTag('Breakout')">Breakout</button><button class="chip py-0.5" onclick="setCustomStrategyTag('Scalp')">Scalp</button><button class="chip py-0.5" onclick="setCustomStrategyTag('Swing')">Swing</button></div></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="field-label">Instrument</label>
+        <select id="ct-asset" class="select" onchange="onCustomTradeAssetChange()">
+          <option value="NIFTY">NIFTY 50</option><option value="BANKNIFTY">BANK NIFTY</option><option value="SENSEX">SENSEX</option><option value="FINNIFTY">FIN NIFTY</option><option value="MIDCPNIFTY">MIDCAP NIFTY</option>
+          <option value="RELIANCE">Reliance</option><option value="HDFCBANK">HDFC Bank</option><option value="ICICIBANK">ICICI Bank</option><option value="TCS">TCS</option><option value="INFY">Infosys</option>
+          <option value="TATAMOTORS">Tata Motors</option><option value="SBIN">SBI</option><option value="ITC">ITC</option><option value="BHARTIARTL">Bharti Airtel</option><option value="LT">L&amp;T</option>
+          <option value="TATASTEEL">Tata Steel</option><option value="SUNPHARMA">Sun Pharma</option><option value="TECHM">Tech Mahindra</option><option value="MARUTI">Maruti</option>
+        </select></div>
+      <div><label class="field-label">Type</label>
+        <select id="ct-instrument" class="select" onchange="onCustomTradeTypeChange()"><option value="CE">Call (CE)</option><option value="PE">Put (PE)</option><option value="FUT">Futures</option><option value="EQ">Shares</option></select></div>
+      <div><label class="field-label">Action</label><select id="ct-action" class="select" onchange="calculateCustomTradeMargin()"><option>BUY</option><option>SELL</option></select></div>
+      <div><label class="field-label">Quantity</label><input id="ct-qty" type="number" min="1" oninput="calculateCustomTradeMargin()" class="input mono" /><div id="ct-lot-info" class="text-[11px] text-slate-500 mt-1"></div></div>
+    </div>
+    <div id="ct-options-config" class="grid grid-cols-2 gap-3">
+      <div><label class="field-label">Strike</label><input id="ct-strike" type="number" oninput="updateEstimatedPrice();calculateCustomTradeMargin()" class="input mono" /><div id="ct-strike-hint" class="text-[11px] text-slate-500 mt-1"></div></div>
+      <div class="flex items-end"><button type="button" onclick="setATMStrike()" class="btn btn-outline w-full">Set ATM</button></div>
+    </div>
+    <div class="grid grid-cols-3 gap-3">
+      <div><label class="field-label">Price</label><input id="ct-price" type="number" step="any" oninput="calculateCustomTradeMargin()" class="input mono" /></div>
+      <div><label class="field-label">Target</label><input id="ct-target" type="number" step="any" class="input mono" /></div>
+      <div><label class="field-label">Stop loss</label><input id="ct-stoploss" type="number" step="any" class="input mono" /></div>
+    </div>
+    <div class="space-y-1.5 text-xs border-t border-[#1e2735] pt-3">
+      <div class="flex justify-between"><span class="text-slate-400">Required margin</span><span id="ct-margin-req" class="mono font-bold">--</span></div>
+      <div class="flex justify-between"><span class="text-slate-400">Available cash</span><span id="ct-avail-bal" class="mono font-bold">--</span></div>
+      <div><span id="ct-margin-status" class="badge badge-neutral">--</span></div>
+    </div>
+    <button id="btn-execute-custom-trade" onclick="executeCustomPaperTrade()" class="btn btn-primary w-full py-3">Place custom trade</button>
+  </div>
+</div>
+
+<!-- Admin renewal desk -->
+<div id="admin-review-modal" class="modal-backdrop hidden">
+  <div class="modal-box p-5 space-y-4">
+    <div class="flex items-center justify-between"><div class="text-sm font-extrabold">Capital review desk</div><button onclick="closeAdminReviewModal()" class="text-slate-400 hover:text-white"><i class="ph ph-x text-lg"></i></button></div>
+    <div id="admin-pending-container"></div>
+    <div class="border-t border-[#1e2735] pt-3 flex flex-wrap gap-2">
+      <button onclick="simulateExhaustion()" class="btn btn-outline text-[11px]">Simulate empty account</button>
+      <button onclick="resetPortfolioBalance()" class="btn btn-outline text-[11px]">Reset to ₹5,00,000</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
